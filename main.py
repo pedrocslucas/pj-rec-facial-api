@@ -10,18 +10,21 @@ logging.getLogger('tensorflow').setLevel(logging.ERROR)
 
 #Começo do Codigo/função:
 def verify(img1_path, img2_path):
-    resultado = DeepFace.verify(img1_path, img2_path)
-    
-    verificacao = resultado['verified']
-    time_taken = resultado['time']
-    
-    print("Mesmo Rosto: ", verificacao)
-    print("Tempo de Verificação: ", time_taken)
-    
-    if verificacao:
-        print("Carimbado =)")
-    else:
-        print("Incapaz =(")
+    try:
+        resultado = DeepFace.verify(img1_path, img2_path)
+
+        verificacao = resultado['verified']
+        time_taken = resultado['time']
+
+        print("Mesmo Rosto: ", verificacao)
+        print("Tempo de Verificação: ", time_taken)
+
+        if verificacao:
+            print("Autenticado =)")
+        else:
+            print("Não Autenticado =(")
+    except Exception:
+        print("Não foi possível reconhecer um rosto na imagem!");
 
 #Chamando a função e passando os rostos:
-verify("rostos_img/foto-padrao.jpeg", "rostos_img/foto-escura.jpeg")
+verify("rostos_img/gab1.jpg", "rostos_img/bh.jpg")
