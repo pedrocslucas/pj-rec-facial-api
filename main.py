@@ -1,21 +1,28 @@
 from flask import Flask, request, jsonify
-from deepface import DeepFace
-import os
 import logging
-from werkzeug.utils import secure_filename
+import os
+import io
+import numpy as np
+from PIL import Image
 
-# Configuração para esconder logs do TensorFlow
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
-os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
-logging.getLogger('tensorflow').setLevel(logging.ERROR)
+# Ocultando logs do TensorFlow
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+logging.getLogger('tensorflow').setLevel(logging.FATAL)
+
+#Importando DeepFace
+from deepface import DeepFace
+
 
 app = Flask(__name__)
 
 # Função para verificar as imagens
-def verify(img1_path, img2_path):
+def verify(img1_array, img2_array):
     try:
-        logging.info(f"Iniciando a verificação facial entre {img1_path} e {img2_path}...")
-        resultado = DeepFace.verify(img1_path, img2_path)
+        logging.info("Iniciando a verificação facial...")
+
+        # Imgs como numpy arrays
+        resultado = DeepFace.verify(img1_array, img2_array)
+
         logging.info("Verificação concluída.")
         return {
             "verificado": resultado['verified'],
@@ -25,33 +32,27 @@ def verify(img1_path, img2_path):
         logging.error(f"Erro na verificação facial: {str(e)}")
         return {"erro": f"Erro na verificação facial: {str(e)}"}
 
-# Função auxiliar para salvar os arquivos recebidos
-def salvar_imagem(imagem, nome_arquivo):
-    caminho = os.path.join('rostos_img', nome_arquivo)
-    imagem.save(caminho)
-    return caminho
-
-# Rota para verificação de rostos
+# Rota para verificação
 @app.route('/verificar', methods=['POST'])
 def verificar_rosto():
     if 'img1' not in request.files or 'img2' not in request.files:
         return jsonify({"erro": "As duas imagens são necessárias!"}), 400
-    
+
     try:
-        # Lendo as imagens diretamente da requisição
-        img1 = request.files['img1']
-        img2 = request.files['img2']
-        
-        # Salvar as imagens no diretório "rostos_img"
-        img1_path = salvar_imagem(img1, secure_filename(img1.filename))
-        img2_path = salvar_imagem(img2, secure_filename(img2.filename))
-        
-        # Verificar se as imagens existem
-        if os.path.exists(img1_path) and os.path.exists(img2_path):
-            resultado = verify(img1_path, img2_path)
-            return jsonify(resultado)
-        else:
-            return jsonify({"erro": "Erro ao salvar as imagens!"}), 500
+        # Lendo as imagens e convertendo para numpy arrays
+        logging.info("Lendo img1...")
+        img1 = Image.open(io.BytesIO(request.files['img1'].read())).convert("RGB")
+        img1_array = np.array(img1)
+
+        logging.info("Lendo img2...")
+        img2 = Image.open(io.BytesIO(request.files['img2'].read())).convert("RGB")
+        img2_array = np.array(img2)
+
+        # Verificação facial
+        resultado = verify(img1_array, img2_array)
+
+        return jsonify(resultado)
+
     except Exception as e:
         logging.error(f"Erro ao processar imagens: {str(e)}")
         return jsonify({"erro": "Erro ao processar as imagens"}), 500
