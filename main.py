@@ -1,30 +1,64 @@
-#importação das bibliotecas:
-from deepface import DeepFace
-import os
+from flask import Flask, request, jsonify
 import logging
+import os
+import io
+import numpy as np
+from PIL import Image
 
-# Tira mensagens de alerta e informativos do tensorflow na hora da exec do cod:
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
-os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0' 
-logging.getLogger('tensorflow').setLevel(logging.ERROR)
+# Ocultando logs do TensorFlow
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+logging.getLogger('tensorflow').setLevel(logging.FATAL)
 
-#Começo do Codigo/função:
-def verify(img1_path, img2_path):
+#Importando DeepFace
+from deepface import DeepFace
+
+
+app = Flask(__name__)
+
+# Função para verificar as imagens
+def verify(img1_array, img2_array):
     try:
-        resultado = DeepFace.verify(img1_path, img2_path)
+        logging.info("Iniciando a verificação facial...")
 
-        verificacao = resultado['verified']
-        time_taken = resultado['time']
+        # Imgs como numpy arrays
+        resultado = DeepFace.verify(img1_array, img2_array)
 
-        print("Mesmo Rosto: ", verificacao)
-        print("Tempo de Verificação: ", time_taken)
+        logging.info("Verificação concluída.")
+        return {
+            "verificado": resultado['verified'],
+            "tempo_de_verificacao": resultado['time']
+        }
+    except Exception as e:
+        logging.error(f"Erro na verificação facial: {str(e)}")
+        return {"erro": f"Erro na verificação facial: {str(e)}"}
 
-        if verificacao:
-            print("Autenticado =)")
-        else:
-            print("Não Autenticado =(")
-    except Exception:
-        print("Não foi possível reconhecer um rosto na imagem!");
+# Rota para verificação
+@app.route('/verificar', methods=['POST'])
+def verificar_rosto():
+    if 'img1' not in request.files or 'img2' not in request.files:
+        return jsonify({"erro": "As duas imagens são necessárias!"}), 400
 
-#Chamando a função e passando os rostos:
-verify("rostos_img/gab1.jpg", "rostos_img/bh.jpg")
+    try:
+        # Lendo as imagens e convertendo para numpy arrays
+        logging.info("Lendo img1...")
+        img1 = Image.open(io.BytesIO(request.files['img1'].read())).convert("RGB")
+        img1_array = np.array(img1)
+
+        logging.info("Lendo img2...")
+        img2 = Image.open(io.BytesIO(request.files['img2'].read())).convert("RGB")
+        img2_array = np.array(img2)
+
+        # Verificação facial
+        resultado = verify(img1_array, img2_array)
+
+        return jsonify(resultado)
+
+    except Exception as e:
+        logging.error(f"Erro ao processar imagens: {str(e)}")
+        return jsonify({"erro": "Erro ao processar as imagens"}), 500
+
+# Inicializando a API
+if __name__ == '__main__':
+    host = os.getenv('FLASK_RUN_HOST', '0.0.0.0')
+    port = int(os.getenv('FLASK_RUN_PORT', 5000))
+    app.run(host=host, port=port, debug=False)
